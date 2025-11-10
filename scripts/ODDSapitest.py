@@ -1,8 +1,12 @@
 import requests
 import pandas as pd
 import zoneinfo as tz
+import os
+from dotenv import load_dotenv
 
-api_key ="e8c86bacda3f222976d61f089fff2848"
+load_dotenv()
+
+api_key = os.getenv("ODDS_API_KEY_FREE")
 sports_key = "basketball_nba" #americanfootball_nfl"#'basketball_nba'
 regions = 'us,us2'
 market = 'spreads'
