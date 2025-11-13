@@ -1,5 +1,15 @@
 {
-  "python.defaultInterpreterPath": ".venv/bin/python",
-  "python.terminal.activateEnvironment": true,
-  "terminal.integrated.cwd": "${workspaceFolder}"
+    "python.defaultInterpreterPath": ".venv/bin/python",
+    "python.terminal.activateEnvironment": true,
+    "terminal.integrated.cwd": "${workspaceFolder}",
+
+    // Force VS Code to load your PATH (fixes Homebrew not showing up)
+    "terminal.integrated.defaultProfile.osx": "zsh",
+    "terminal.integrated.profiles.osx": {
+        "zsh": {
+            "path": "zsh",
+            "args": ["-l"]   // <-- THIS loads ~/.zprofile and ~/.zshrc
+        }
+    }
 }
+
