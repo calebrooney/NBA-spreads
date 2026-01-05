@@ -50,3 +50,9 @@ def clean_odds_data(df):
 
     return final
 
+# use for running script
+
+# if __name__ == "__main__":
+#     raw = pd.read_csv("../data/raw/NBAodds2025-11-10.csv")
+#     cleaned = clean_odds_data(raw)
+#     print(cleaned.head())

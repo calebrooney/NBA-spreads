@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 api_key = os.getenv("ODDS_API_KEY_FREE")
-sports_key = "basketball_nba" #americanfootball_nfl"#'basketball_nba'
+sports_key = "basketball_nba"
 regions = 'us,us2'
 market = 'spreads'
 commenceTimeTo = pd.Timestamp.now(tz=tz.ZoneInfo('US/Pacific')).date()
@@ -26,3 +26,4 @@ ODDSdf = pd.json_normalize(data, sep='_')
 #save to csv
 ODDSdf.to_csv(f'NBAodds{today}.csv', index=False)
 print(commenceTimeTo)
+
