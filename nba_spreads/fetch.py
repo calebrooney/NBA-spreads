@@ -48,18 +48,29 @@ def fetch_csv(
         url = f"{base}/{link_params}"
 
 
-    # load data, save to csv in data/raw
+    # load data
     response = requests.get(url)
     data = response.json()
     ODDSdf = pd.json_normalize(data, sep='_')
-    ODDSdf.to_csv(f'../Gambling-Project/data/raw/NBAodds{day}.csv', index=False) 
 
-    print(f"{day} data saved to data/raw")
-    return f"../nba_spreads/data/raw/NBAodds_{day}.csv"
+    if ODDSdf.empty:
+        print(f"{day}: no games — nothing saved")
+        return None
 
-    # print(f"{day}: saved {len(ODDSdf)} rows to data/raw")
-    # return output_path
+    # save to csv in data/raw
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    RAW_DIR = os.path.join(BASE_DIR, "..", "data", "raw")
+    os.makedirs(RAW_DIR, exist_ok=True)
+    output_path = os.path.join(RAW_DIR, f"NBAodds_{day}.csv")
+    ODDSdf.to_csv(output_path, index=False)
 
 
-date = "2026-01-05"
+    # print(f"{day} data saved to data/raw")
+    # return f"../nba_spreads/data/raw/NBAodds_{day}.csv"
+
+    print(f"{day}: saved {len(ODDSdf)} rows to data/raw")
+    return output_path
+
+
+date = "2026-01-06T17:00:00Z"
 fetch_csv(date)
