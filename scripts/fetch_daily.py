@@ -1,43 +1,15 @@
-# used to get spreads of the day
+# scripts/fetch_daily.py
+# cron job runs at 6:30 am, 11 am, 3:30 pm (17:30) PT
 
-import requests
-import pandas as pd
-import zoneinfo as tz
-import os
-from dotenv import load_dotenv
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
-load_dotenv()
+from nba_spreads.fetch import fetch_csv  # adjust to your module path
 
-api_key = os.getenv("ODDS_API_KEY_FREE")
-sports_key = "basketball_nba"
-regions = 'us,us2'
-market = 'spreads'
-commenceTimeTo = pd.Timestamp.now(tz=tz.ZoneInfo('US/Pacific')).date()
-today = str(commenceTimeTo)
+def main():
+    pacific = ZoneInfo("America/Los_Angeles")
+    today_pacific = datetime.now(pacific).date().isoformat()  # 'YYYY-MM-DD'
+    fetch_csv(today_pacific)
 
-# url = f'https://api.the-odds-api.com/v4/sports/{sports_key}/odds/?apiKey={api_key}&regions={regions}&markets={market}'
-
-# response = requests.get(url)
-# data = response.json()
-
-# def fetch_csv(
-#         commenceTimeTo = pd.Timestamp.now(tz=tz.ZoneInfo('US/Pacific')).date()
-#         ,api_key = os.getenv("ODDS_API_KEY_FREE")
-#         ):
-#     load_dotenv()
-    
-#     sports_key = "basketball_nba"
-#     regions = 'us,us2'
-#     market = 'spreads'
-
-#     return 
-
-# ODDSdf = pd.json_normalize(data, sep='_')
-# print(ODDSdf.sample(5))
-# print(today)
-
-# #save to csv
-# ODDSdf.to_csv(f'NBAodds{today}.csv', index=False)
-print(commenceTimeTo)
-
-#### refactor this file to call fetch_csv function from nba_spreads package
+if __name__ == "__main__":
+    main()
