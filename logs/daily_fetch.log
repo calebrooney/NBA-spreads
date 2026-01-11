@@ -1,0 +1,13 @@
+Exception ignored error evaluating path:
+Traceback (most recent call last):
+  File "<frozen getpath>", line 353, in <module>
+InterruptedError: [Errno 4] Interrupted system call
+Fatal Python error: error evaluating path
+Python runtime state: core initialized
+
+Current thread 0x00000002010420c0 (most recent call first):
+  <no Python frame>
+2026-01-07_1101: saved 12 rows to data/raw
+2026-01-07_1730: saved 12 rows to data/raw
+2026-01-09_0630: saved 10 rows to data/raw
+2026-01-10_1730: saved 5 rows to data/raw

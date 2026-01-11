@@ -12,7 +12,6 @@ def fetch_csv(
         live = True
         ):
     """
-    Docstring for fetch_csv
     
     :param date: timestamp of date, formatted as 'YYYY-MM-DD' (string)
     :param live: default True, set to False for historical data (need valid paid API key for live = False)
@@ -23,22 +22,14 @@ def fetch_csv(
     regions = 'us,us2'
     market = 'spreads'
 
-    # # limit responses to only games from given date (use PST, = UTC-8)
-    # timestamp_utc = datetime.strptime(date, "%Y-%m-%dT%H:%M:%SZ")
-
-    # pacific_day_start = timestamp_utc.replace(hour=8, minute=0, second=0)
-    # pacific_day_end   = pacific_day_start + timedelta(days=1) - timedelta(seconds=1)
-
-    # commence_time_from = pacific_day_start.strftime("%Y-%m-%dT%H:%M:%SZ")
-    # commence_time_to   = pacific_day_end.strftime("%Y-%m-%dT%H:%M:%SZ")
-
+    # limit responses to only games from given date (use PST, = UTC-8)
     # Parse the Pacific date
     game_date = datetime.strptime(date, "%Y-%m-%d").date()
     day = date  # for filenames/logging
 
     # Build Pacific day window (00:00:00 → 23:59:59) and convert to UTC
     pacific, utc = ZoneInfo("America/Los_Angeles"), ZoneInfo("UTC")
-    window_start_local = datetime.combine(game_date, datetime.min.time(), tzinfo=pacific)
+    window_start_local = datetime.combine(game_date, datetime.min.time(), tzinfo=pacific) 
     window_end_local = window_start_local + timedelta(days=1) - timedelta(seconds=1)
 
     commence_time_from = window_start_local.astimezone(ZoneInfo("UTC")).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -62,7 +53,8 @@ def fetch_csv(
         # Use hard-coded at 9 am for historical pulls
         # Snapshot time: 9:00 AM Pacific on that date, converted to UTC (for historical endpoint)
         snapshot_local = window_start_local.replace(hour=9, minute=0, second=0)
-        snapshot_utc = snapshot_local.astimezone(ZoneInfo("UTC")).strftime("%Y-%m-%dT%H:%M:%SZ")
+        snapshot_utc = snapshot_local.astimezone(ZoneInfo("UTC"))#.strftime("%Y-%m-%dT%H:%M:%SZ")
+        snapshot_utc_str, snapshot_local_str = snapshot_utc.strftime("%Y-%m-%dT%H:%M:%SZ"), snapshot_local.strftime("%H%M") # string formats for labeling outputs
         # for historical data, extra date parameter required
         api_key = os.getenv("ODDS_API_KEY_PAID")
         base = "https://api.the-odds-api.com"
@@ -70,7 +62,7 @@ def fetch_csv(
             f"v4/historical/sports/{sports_key}/odds"
             f"?apiKey={api_key}&regions={regions}&markets={market}"
             f"&commenceTimeFrom={commence_time_from}&commenceTimeTo={commence_time_to}"
-            f"&date={snapshot_utc}"
+            f"&date={snapshot_utc_str}"
         )
         
     # load data
@@ -79,27 +71,34 @@ def fetch_csv(
     data = response.json()
     response.raise_for_status() #raise exception if data error occurs such as rate-limit quota hit, incorrect params, etc
     ODDSdf = pd.json_normalize(data, sep='_')
-    if ODDSdf.empty:
+
+    # if no historical games, ODDsdf is 1 row, and 'data' is empty list
+    if not live and ODDSdf.at[0, "data"] == []:
         print(f"{day}: no games — nothing saved")
         return None
     ODDSdf["snapshot_time_pacific"] = snapshot_local.isoformat()
     ODDSdf["snapshot_time_utc"] = snapshot_utc_str
 
-
     # save to csv in data/raw
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    RAW_DIR = os.path.join(BASE_DIR, "..", "data", "raw")
+
+    # fetch historical data into ../data/raw/historical
+    if live:
+        RAW_DIR = os.path.join(BASE_DIR, "..", "data", "raw")
+    else:
+        RAW_DIR = os.path.join(BASE_DIR, "..", "data", "raw", "historical")
+
+        #RAW_DIR = os.path.join(BASE_DIR, "..", "data", "historical")
+
     os.makedirs(RAW_DIR, exist_ok=True)
     output_path = os.path.join(RAW_DIR, f"NBAodds_{day}_{snapshot_local_str}.csv")
     ODDSdf.to_csv(output_path, index=False)
-
-    # print(f"{day} data saved to data/raw")
-    # return f"../nba_spreads/data/raw/NBAodds_{day}.csv"
-
 
     print(f"{day}_{snapshot_local_str}: saved {len(ODDSdf)} rows to data/raw")
     return output_path
 
 
+
+#fetch_csv('2025-08-01', live=False)
 # today = str(pd.Timestamp.now(tz=tz.ZoneInfo('US/Pacific')).date())
-# fetch_csv(today)
+# fetch_csv(today, live=True)
