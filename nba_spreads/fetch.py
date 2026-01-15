@@ -15,6 +15,7 @@ def fetch_csv(
     
     :param date: timestamp of date, formatted as 'YYYY-MM-DD' (string)
     :param live: default True, set to False for historical data (need valid paid API key for live = False)
+    :return: path to saved CSV file
     """
     load_dotenv()
     

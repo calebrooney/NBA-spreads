@@ -3,3 +3,6 @@ __pycache__/
 .vscode/
 .DS_Store
 .venv/
+logs/
+data/raw/
+data/processed/
