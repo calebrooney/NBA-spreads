@@ -132,15 +132,37 @@ def clean_team_log(df):
     # remove top-level of column multiindex hierarchy
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.droplevel(0)
-        
+     
     # get rid of extra 'column name' rows
     df = df[df["Rk"] != "Rk"].copy()  # copy() to avoid SettingWithCopyWarning
-        # df.reset_index(drop=True, inplace=True)
+    df.reset_index(drop=True, inplace=True)
 
-        # #unnamed_5 --> home/away col
-        # df.loc[:, "Unnamed: 5"] = df["Unnamed: 5"].fillna("Home")
-        # df.loc[:, "Unnamed: 5"] = df["Unnamed: 5"].replace({"@": "Away"})
-        # df.rename(columns={"Unnamed: 5": "Home/Away"}, inplace=True)
+    #unnamed_5 --> home/away col
+    df.loc[:, "Unnamed: 3_level_1"] = df["Unnamed: 3_level_1"].fillna("Home")
+    df.loc[:, "Unnamed: 3_level_1"] = df["Unnamed: 3_level_1"].replace({"@": "Away"})
+    df.rename(columns={"Unnamed: 3_level_1": "Home/Away"}, inplace=True)
+
+    # set OT column os boolean, True if OT else False
+    df.loc[:, "OT"] = df["OT"].apply(lambda x: True if x == "OT" else False)
+
+    # remove redundant column 'rk, rename 'Gtm' to Game
+    df.drop(columns=["Rk"], inplace=True)
+    df.rename(columns={"Gtm": "Game"}, inplace=True)
+
+
+
+    # rename score columns (by index position to remove duplicate 'Opp' col names)
+    df.rename(columns={df.columns[5]: "Tm_Score"}, inplace=True)
+    df.rename(columns={df.columns[6]: "Opp_Score"}, inplace=True)
+
+    # # # create margin col. if home True then team pts - opp pts else opp pts - team pts
+    # # first ensure Tm and Opp cols are numeric
+    # df["Tm"] = pd.to_numeric(df["Tm_Score"], errors='coerce').astype('int64')
+    # df["Opp"] = pd.to_numeric(df["Opp_Score"], errors='coerce').astype('int64')
+    # df.loc[:, "Margin"] = df.apply(
+    #     lambda row: row["Tm_Score"] - row["Opp_Score"] if row["Home/Away"] == "Home" else row["Opp_Score"] - row["Tm_Score"], axis=1
+    # )
+
 
         # #rename and split unnamed_7 col
         # df.rename(columns={"Unnamed: 7": "Result"}, inplace=True)
@@ -174,6 +196,7 @@ celts26 = scrape_team_adv_game_log('BOS',2026)
 celtsCleaned = clean_team_log(celts26)
 print(f'raw: \n{celts26}')
 print(f'cleaned: \n{celtsCleaned}')
+
 # print(celts26.columns)
 # print(celtsCleaned.columns)
 #celts25yoffs = scrape_team_adv_game_log('BOS',2025,playoffs=True)
@@ -187,7 +210,6 @@ print(f'cleaned: \n{celtsCleaned}')
 
 # thanks to Gabriel Cano 
 # https://medium.com/analytics-vidhya/web-scraping-nba-data-with-pandas-beautifulsoup-and-regex-pt-1-e3d73679950a
-
 
 
 # from basketball-reference-scraper
