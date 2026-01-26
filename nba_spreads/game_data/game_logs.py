@@ -7,6 +7,7 @@ import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 from io import StringIO
+import time
 
 teams = ['ATL', 'BOS', 'BRK', 'CHI', 'CHO', 'CLE', 'DAL', 'DEN', 'DET', 'GSW', 'HOU', 'IND', 'LAC', 'LAL', 'MEM', 'MIA', 'MIL', 'MIN', 'NOP', 'NYK', 'OKC', 'ORL', 'PHI', 'PHO', 'POR', 'SAC', 'SAS', 'TOR', 'UTA', 'WAS']
 
@@ -88,6 +89,25 @@ def player_advBoxScore(player: str, season: int, saveJSON=False): #returns DF of
         print("html5lib not found. Please install it.")
         return None
 
+
+def dedupe_columns(cols):
+    '''
+    Dedupe columns by appending .1, .2, etc to duplicates
+    Use: df.columns = dedupe_columns(df.columns)
+    :param cols: df.columns list
+    '''
+    seen = {}
+    out = []
+    for c in cols:
+        k = c
+        if k in seen:
+            seen[k] += 1
+            out.append(f"{k}.{seen[k]}")
+        else:
+            seen[k] = 0
+            out.append(k)
+    return out
+
 def scrape_team_adv_game_log(team, season, playoffs=False):
     '''
     Scrapes advanced game logs from basketball reference for given team and season
@@ -113,34 +133,32 @@ def scrape_team_adv_game_log(team, season, playoffs=False):
     df_list = pd.read_html(StringIO(str(table)))
     df = df_list[0]
 
-    # view all columns of df
-    #pd.set_option('display.max_columns', None)
-    #pd.set_option('display.expand_frame_repr', False)
+    # cant exceed 20 requests per min --> wait 3.3 sec between requests
+    time.sleep(3.3)
 
-    # cant exceed 20 requests per min -->
-    # sleep(4) to cap loops of function at 15 requests when ingesting training data
-
-    # print(table)
-    #print(df)
-    #print(df.columns)
     return df
 
-
-def clean_team_log(df):
+def clean_team_log(df, team):
         ## todo: create unique game key
         ## should be date-home-away
     # remove top-level of column multiindex hierarchy
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.droplevel(0)
+    
+    # dedupe columns
+    df.columns = dedupe_columns(df.columns)
      
     # get rid of extra 'column name' rows
     df = df[df["Rk"] != "Rk"].copy()  # copy() to avoid SettingWithCopyWarning
     df.reset_index(drop=True, inplace=True)
 
-    #unnamed_5 --> home/away col
+    #unnamed_3_level1 --> home/away col
     df.loc[:, "Unnamed: 3_level_1"] = df["Unnamed: 3_level_1"].fillna("Home")
     df.loc[:, "Unnamed: 3_level_1"] = df["Unnamed: 3_level_1"].replace({"@": "Away"})
-    df.rename(columns={"Unnamed: 3_level_1": "Home/Away"}, inplace=True)
+    df.rename(columns={"Unnamed: 3_level_1": "Home"}, inplace=True)
+    # match "home" col to SQL schema
+    df["Home"] = df["Home"].map({"Home": True, "Away": False})
+                       
 
     # set OT column os boolean, True if OT else False
     df.loc[:, "OT"] = df["OT"].apply(lambda x: True if x == "OT" else False)
@@ -149,53 +167,56 @@ def clean_team_log(df):
     df.drop(columns=["Rk"], inplace=True)
     df.rename(columns={"Gtm": "Game"}, inplace=True)
 
+    # rename score columns and opponent stats columns
+    df.rename(columns={
+        df.columns[5]: "Tm_Score",
+        df.columns[6]: "Opp_Score"},
+        inplace=True)
 
+    df.rename(columns={
+        df.columns[-4]: "Opp_eFG%"
+        ,df.columns[-3]: "Opp_TOV%"
+        ,df.columns[-2]: "Opp_ORB%"
+        ,df.columns[-1]: "Opp_FT/FGA"},
+        inplace=True)
 
-    # rename score columns (by index position to remove duplicate 'Opp' col names)
-    df.rename(columns={df.columns[5]: "Tm_Score"}, inplace=True)
-    df.rename(columns={df.columns[6]: "Opp_Score"}, inplace=True)
+    # # create home margin col --> if home True then team pts - opp pts else opp pts - team pts
+    # first ensure Tm and Opp cols are numeric
+    df["Tm_Score"] = pd.to_numeric(df["Tm_Score"], errors='coerce').astype('int64')
+    df["Opp_Score"] = pd.to_numeric(df["Opp_Score"], errors='coerce').astype('int64')
+    df.loc[:, "Home_Margin"] = df.apply(
+        lambda row: row["Tm_Score"] - row["Opp_Score"] if row["Home"] == True else row["Opp_Score"] - row["Tm_Score"], axis=1
+    )
 
-    # # # create margin col. if home True then team pts - opp pts else opp pts - team pts
-    # # first ensure Tm and Opp cols are numeric
-    # df["Tm"] = pd.to_numeric(df["Tm_Score"], errors='coerce').astype('int64')
-    # df["Opp"] = pd.to_numeric(df["Opp_Score"], errors='coerce').astype('int64')
-    # df.loc[:, "Margin"] = df.apply(
-    #     lambda row: row["Tm_Score"] - row["Opp_Score"] if row["Home/Away"] == "Home" else row["Opp_Score"] - row["Tm_Score"], axis=1
-    # )
+    # add team abbreviation column
+    df.loc[:, "Team"] = team
 
+    # create unique game ID col -- date-home-away
+    # if home: date-team-opp else date-opp-team
+    df.loc[:, "Game_ID"] = df.apply(
+        lambda row: f"{row['Date']}-{team}-{row['Opp']}" if row["Home"] == True else f"{row['Date']}-{row['Opp']}-{team}",
+        axis=1
+    )
 
-        # #rename and split unnamed_7 col
-        # df.rename(columns={"Unnamed: 7": "Result"}, inplace=True)
-        # result_margin_split = df["Result"].str.split("(", expand=True)
-        # df.loc[:, "Result"] = result_margin_split[0].str.strip()
-        # df.loc[:, "Margin"] = result_margin_split[1].str.replace(")", "", regex=True).str.replace("+", "", regex=True).str.strip()
+    # convert date & numeric columns to appropriate dtypes
+    df["Date"] = pd.to_datetime(df["Date"], format='%Y-%m-%d')
 
-        # # Move the Margin column to the desired position
-        # col = df.pop('Margin')
-        # df.insert(df.columns.get_loc("Result") + 1, col.name, col)
-        
-        # #remove age column
-        # df.drop(columns = ["Age"], inplace= True)
+    # rslt is reduntant with Home_Margin col
+    df.drop(columns=["Rslt"], inplace=True)
 
-        # #set columns to appropriate data types
-        # float_columns = df.columns[-17:]
-        # df[float_columns] = df[float_columns].apply(pd.to_numeric, errors='coerce').astype('float64')
-
-        # df[df.columns[0]] = df[df.columns[0]].apply(pd.to_numeric, errors='coerce').astype('int64')
-
-        # str_columns = df.columns[3:7]
-        # df[str_columns] = df[str_columns].astype('str')
-
-        # df["Date"] = pd.to_datetime(df["Date"], format='%Y-%m-%d')
-
-
-        # if saveJSON:
-        #     df.to_json(f"{player}_{season}_advBoxScore.json", orient='records',indent=2)
     return df
+
 celts26 = scrape_team_adv_game_log('BOS',2026)
-celtsCleaned = clean_team_log(celts26)
+celtsCleaned = clean_team_log(celts26, 'BOS')
 print(f'raw: \n{celts26}')
 print(f'cleaned: \n{celtsCleaned}')
+
+
+# celts25 = scrape_team_adv_game_log('BOS',2025)
+# celtsCleaned25 = clean_team_log(celts25)
+# print(f'raw: \n{celts25}')
+# print(f'cleaned: \n{celtsCleaned25}')
+
 
 # print(celts26.columns)
 # print(celtsCleaned.columns)
