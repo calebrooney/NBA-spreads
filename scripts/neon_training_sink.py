@@ -8,7 +8,9 @@ from pathlib import Path
 
 import pandas as pd
 from dotenv import load_dotenv
-from sqlalchemy import create_engine
+from sqlalchemy import MetaData, Table, create_engine, text
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 teams_dict = {'ATL':'Atlanta Hawks', 'BOS':'Boston Celtics', 'BRK':'Brooklyn Nets', 'CHI':'Chicago Bulls', 'CHO':'Charlotte Hornets', 'CLE':'Cleveland Cavaliers', 'DAL':'Dallas Mavericks', 'DEN':'Denver Nuggets', 'DET':'Detroit Pistons', 'GSW':'Golden State Warriors', 'HOU':'Houston Rockets', 'IND':'Indiana Pacers', 'LAC':'LA Clippers', 'LAL':'Los Angeles Lakers', 'MEM':'Memphis Grizzlies', 'MIA':'Miami Heat', 'MIL':'Milwaukee Bucks', 'MIN':'Minnesota Timberwolves', 'NOP':'New Orleans Pelicans', 'NYK':'New York Knicks', 'OKC':'Oklahoma City Thunder', 'ORL':'Orlando Magic', 'PHI':'Philadelphia 76ers', 'PHO':'Phoenix Suns', 'POR':'Portland Trail Blazers', 'SAC':'Sacramento Kings', 'SAS':'San Antonio Spurs', 'TOR':'Toronto Raptors', 'UTA':'Utah Jazz', 'WAS':'Washington Wizards'}
 
@@ -36,6 +38,12 @@ def odds_db_prep(df):
     """
     # Make a copy to avoid modifying original
     df = df.copy()
+
+    # Normalize key string fields to make team-name lookups deterministic.
+    # Some source CSVs contain trailing whitespace or minor formatting inconsistencies.
+    for col in ("home_team", "away_team", "name"):
+        if col in df.columns:
+            df[col] = df[col].astype("string").str.strip()
     
     # Convert full team names to abbreviations for game_id
     def get_team_abbrev(full_name):
@@ -46,8 +54,18 @@ def odds_db_prep(df):
     df['home_team_abbrev'] = df['home_team'].apply(get_team_abbrev)
     df['away_team_abbrev'] = df['away_team'].apply(get_team_abbrev)
     
-    # Extract date from commence_time (format: YYYY-MM-DDTHH:MM:SSZ)
-    df['commence_date'] = pd.to_datetime(df['commence_time']).dt.date
+    # Extract the *local* game date from commence_time.
+    #
+    # ``commence_time`` comes in as UTC (e.g. "...Z"). Basketball-Reference game logs use
+    # the local/US calendar date of the game. For late-night games, the UTC date can be
+    # the next day, which would create a mismatched ``game_id`` and break the
+    # ``odds(game_id, team) -> game_logs(game_id, team)`` foreign key.
+    #
+    # We therefore convert to a US timezone before taking ``.date``.
+    # (Eastern is the most consistent reference for NBA schedules and matches BRef dates
+    # much better than UTC.)
+    commence_utc = pd.to_datetime(df["commence_time"], utc=True, errors="coerce")
+    df["commence_date"] = commence_utc.dt.tz_convert("America/New_York").dt.date
     
     # Create game_id in format: YYYY-MM-DD-HOME-AWAY
     df.loc[:, "game_id"] = df.apply(
@@ -86,6 +104,10 @@ def odds_db_prep(df):
         df.drop(columns=['id'], inplace=True)
     
     # Ensure game_id is CHAR(18) - should be exactly 18 chars: YYYY-MM-DD-XXX-XXX
+    # Drop rows where we couldn't build a game_id; these will violate the FK.
+    n_null_game_id = int(df["game_id"].isna().sum()) if "game_id" in df.columns else 0
+    if n_null_game_id:
+        df = df[df["game_id"].notna()].copy()
     df['game_id'] = df['game_id'].astype(str).str[:18]
     
     # Ensure data types match schema
@@ -238,19 +260,32 @@ def get_db_engine():
         raise ValueError("DATABASE_URL is missing. Your .env did not load or is malformed.")
     
     # Create engine
-    engine = create_engine(database_url)
+    # Hide bound parameters in exceptions so failures don't dump huge payloads to the terminal.
+    engine = create_engine(database_url, hide_parameters=True)
     return engine
 
-def insert_game_logs(df, engine=None, schema='nba', table='game_logs', if_exists='append'):
+def insert_game_logs(
+    df,
+    engine=None,
+    schema: str = 'nba',
+    table: str = 'game_logs',
+    if_exists: str = 'append',
+    chunksize: int = 1000,
+):
     """
-    Insert game logs data into Neon database (fail-fast on duplicate keys).
+    Insert game logs data into Neon database.
+
+    This loader is meant to be safe to re-run. ``nba.game_logs`` has a primary key on
+    ``(game_id, team)``, so a naive append will fail if you've already loaded any rows.
+    We therefore use Postgres ``ON CONFLICT DO NOTHING`` on that key and insert in chunks.
 
     :param df: dataframe prepared by game_logs_db_prep()
     :param engine: SQLAlchemy engine (if None, creates new one)
     :param schema: database schema name (default: 'nba')
     :param table: table name (default: 'game_logs')
     :param if_exists: what to do if table exists ('append', 'replace', 'fail')
-    :return: number of rows inserted
+    :param chunksize: number of rows per batch insert
+    :return: number of rows actually inserted (excludes conflicts)
     """
     if engine is None:
         engine = get_db_engine()
@@ -258,18 +293,54 @@ def insert_game_logs(df, engine=None, schema='nba', table='game_logs', if_exists
     if df.empty:
         return 0
 
-    df.to_sql(
-        name=table,
-        con=engine,
-        schema=schema,
-        if_exists=if_exists,
-        index=False,
-        method='multi'
-    )
+    try:
+        # Reflect the existing table so SQLAlchemy can properly quote odd column names
+        # like "TS%" and "FT/FGA" during inserts.
+        md = MetaData(schema=schema)
+        tbl = Table(table, md, autoload_with=engine)
 
-    return len(df)
+        # Convert NaN/NaT to None so psycopg2 sends proper SQL NULLs.
+        clean = df.where(pd.notna(df), None)
+        rows = clean.to_dict(orient="records")
 
-def insert_odds(df, engine=None, schema='nba', table='odds', if_exists='append'):
+        # Insert with ON CONFLICT DO NOTHING on the PK (game_id, team) so reruns are safe.
+        inserted = 0
+        with engine.begin() as conn:
+            for i in range(0, len(rows), chunksize):
+                batch = rows[i : i + chunksize]
+                if not batch:
+                    continue
+                stmt = (
+                    pg_insert(tbl)
+                    .values(batch)
+                    .on_conflict_do_nothing(index_elements=["game_id", "team"])
+                )
+                res = conn.execute(stmt)
+                # psycopg2 returns inserted rows for INSERT .. ON CONFLICT DO NOTHING.
+                inserted += int(res.rowcount or 0)
+    except SQLAlchemyError as e:
+        orig = getattr(e, "orig", None)
+        orig_msg = f"{type(orig).__name__}: {orig}" if orig is not None else str(e)
+        raise RuntimeError(
+            f"Failed inserting game logs into {schema}.{table} (rows={len(df)}, chunksize={chunksize}). "
+            f"Underlying error: {orig_msg}"
+        ) from e
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed inserting game logs into {schema}.{table} (rows={len(df)}, chunksize={chunksize}). "
+            f"Unexpected error: {type(e).__name__}: {e}"
+        ) from e
+
+    return inserted
+
+def insert_odds(
+    df,
+    engine=None,
+    schema: str = 'nba',
+    table: str = 'odds',
+    if_exists: str = 'append',
+    chunksize: int = 1000,
+):
     """
     Insert odds data into Neon database (fail-fast on duplicate keys).
 
@@ -288,16 +359,94 @@ def insert_odds(df, engine=None, schema='nba', table='odds', if_exists='append')
     if df.empty:
         return 0
 
-    df.to_sql(
-        name=table,
-        con=engine,
-        schema=schema,
-        if_exists=if_exists,
-        index=False,
-        method='multi'
-    )
+    # Use a conservative chunksize to avoid Postgres parameter limits and massive
+    # error dumps that include entire multi-row INSERT statements.
+    try:
+        df.to_sql(
+            name=table,
+            con=engine,
+            schema=schema,
+            if_exists=if_exists,
+            index=False,
+            method='multi',
+            chunksize=chunksize,
+        )
+    except SQLAlchemyError as e:
+        orig = getattr(e, "orig", None)
+        orig_msg = f"{type(orig).__name__}: {orig}" if orig is not None else str(e)
+        raise RuntimeError(
+            f"Failed inserting odds into {schema}.{table} (rows={len(df)}, chunksize={chunksize}). "
+            f"Underlying error: {orig_msg}"
+        ) from e
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed inserting odds into {schema}.{table} (rows={len(df)}, chunksize={chunksize}). "
+            f"Unexpected error: {type(e).__name__}: {e}"
+        ) from e
 
     return len(df)
+
+
+def filter_odds_to_game_logs_fk(
+    odds_df: pd.DataFrame,
+    engine,
+    schema: str = "nba",
+    game_logs_table: str = "game_logs",
+    sample_n: int = 10,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Filter odds rows to those whose (game_id, team) foreign keys exist in ``nba.game_logs``.
+
+    This prevents a bulk odds insert from failing halfway through due to a small number of
+    missing game logs rows (e.g. incomplete historical scrape / CSV gaps).
+
+    :param odds_df: Odds dataframe prepared by ``odds_db_prep``.
+    :param engine: SQLAlchemy engine connected to Neon.
+    :param schema: Schema name containing the game logs table.
+    :param game_logs_table: Game logs table name.
+    :param sample_n: Number of missing key examples to print for debugging.
+    :return: (filtered_odds_df, missing_keys_df) where missing_keys_df has columns [game_id, team].
+    """
+    if odds_df.empty:
+        return odds_df, pd.DataFrame(columns=["game_id", "team"])
+    if not {"game_id", "team"}.issubset(odds_df.columns):
+        raise ValueError("odds_df must contain columns: game_id, team")
+
+    # Unique FK pairs implied by odds.
+    odds_keys = odds_df[["game_id", "team"]].dropna().drop_duplicates()
+    if odds_keys.empty:
+        return odds_df.iloc[0:0].copy(), pd.DataFrame(columns=["game_id", "team"])
+
+    # Query existing keys from DB for only the involved game_ids (reduces DB work).
+    game_ids = odds_keys["game_id"].dropna().unique().tolist()
+    if not game_ids:
+        return odds_df.iloc[0:0].copy(), odds_keys.copy()
+
+    qry = text(
+        f"""
+        select game_id, team
+        from {schema}.{game_logs_table}
+        where game_id = any(:game_ids)
+        """
+    )
+    existing = pd.read_sql(qry, con=engine, params={"game_ids": game_ids})
+    existing = existing.drop_duplicates(subset=["game_id", "team"])
+
+    merged = odds_keys.merge(existing, on=["game_id", "team"], how="left", indicator=True)
+    missing = merged[merged["_merge"] == "left_only"][["game_id", "team"]].copy()
+
+    if not missing.empty:
+        # High-signal examples for debugging (don’t dump huge output).
+        examples = missing.head(sample_n).to_dict(orient="records")
+        print(
+            f"Warning: {len(missing)} odds FK pairs missing from {schema}.{game_logs_table}. "
+            f"Dropping those odds rows. Examples: {examples}"
+        )
+
+    # Keep only odds rows whose FK pair exists.
+    keep_keys = existing
+    filtered = odds_df.merge(keep_keys, on=["game_id", "team"], how="inner")
+    return filtered, missing
 
 
 def bref_season_end_year(d: date) -> int:
@@ -403,8 +552,10 @@ def load_historical_game_logs_csv(
 
     # ``game_logs_db_prep`` handles final column mapping/types for Neon schema.
     prepped = game_logs_db_prep(logs, "NBA")
-    if "game_id" in prepped.columns:
-        prepped = prepped.drop_duplicates(subset=["game_id"], keep="first")
+    # ``nba.game_logs`` is keyed by (game_id, team). Do NOT dedupe on game_id alone,
+    # or you will drop one of the two team-rows per game and odds inserts will fail FK checks.
+    if {"game_id", "team"}.issubset(prepped.columns):
+        prepped = prepped.drop_duplicates(subset=["game_id", "team"], keep="first")
     return prepped
 
 
@@ -437,7 +588,10 @@ def run_bulk_load(
     if "commence_time" not in combined.columns:
         raise ValueError("Combined odds data has no commence_time column.")
 
-    cd = pd.to_datetime(combined["commence_time"], errors="coerce").dt.date
+    # Use the same local-date logic as ``odds_db_prep`` so our game-logs date window
+    # matches the ``game_id`` dates derived from odds.
+    commence_utc = pd.to_datetime(combined["commence_time"], utc=True, errors="coerce")
+    cd = commence_utc.dt.tz_convert("America/New_York").dt.date
     combined = combined.assign(_commence_date=cd)
     combined = combined.dropna(subset=["_commence_date"])
     if since is not None:
@@ -450,8 +604,10 @@ def run_bulk_load(
         print("No rows in selected date window; exiting.")
         return
 
-    min_date = pd.to_datetime(combined["commence_time"]).dt.date.min()
-    max_date = pd.to_datetime(combined["commence_time"]).dt.date.max()
+    commence_utc2 = pd.to_datetime(combined["commence_time"], utc=True, errors="coerce")
+    commence_local_date = commence_utc2.dt.tz_convert("America/New_York").dt.date
+    min_date = commence_local_date.min()
+    max_date = commence_local_date.max()
     odds_ready = odds_db_prep(combined)
 
     if game_logs_csv is None:
@@ -470,6 +626,12 @@ def run_bulk_load(
 
     engine = get_db_engine()
     n_logs = insert_game_logs(game_logs_df, engine=engine)
+    odds_ready, missing_fk = filter_odds_to_game_logs_fk(odds_ready, engine=engine)
+    if odds_ready.empty:
+        raise ValueError(
+            "All prepared odds rows are missing matching (game_id, team) keys in nba.game_logs. "
+            "Your historical_game_logs.csv is likely incomplete for this date range."
+        )
     n_odds = insert_odds(odds_ready, engine=engine)
     print(f"Inserted {n_logs} game_logs rows and {n_odds} odds rows.")
 

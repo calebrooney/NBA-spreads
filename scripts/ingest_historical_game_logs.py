@@ -125,8 +125,9 @@ def main() -> None:
         return
 
     combined = pd.concat(frames, ignore_index=True)
-    # Defensive: reg vs post should not duplicate the same ``Game_ID``.
-    combined = combined.drop_duplicates(subset=["Game_ID"], keep="first")
+    # Defensive: reg vs post should not duplicate the same (Game_ID, Team) row.
+    # Do NOT dedupe on Game_ID alone: each game has two team-rows (one per team).
+    combined = combined.drop_duplicates(subset=["Game_ID", "Team"], keep="first")
 
     if args.csv:
         out = Path(args.csv)

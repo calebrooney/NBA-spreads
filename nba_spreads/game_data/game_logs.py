@@ -32,32 +32,58 @@ def dedupe_columns(cols):
     return out
 
 def scrape_team_adv_game_log(team, season, playoffs=False):
-    '''
-    Scrapes advanced game logs from basketball reference for given team and season
-    
-    :param team: 3-letter NBA team abbreviation (ie 'BOS' for celtics, 'GSW' for Warriors, etc)
-    :param season: End year of given season (eg 2022 for 2021-22 season)
-    :param playoffs: Set True to get playoff game log
-    :returns dataframe of raw table:
-    '''
-    team_stats_url = f"https://www.basketball-reference.com/teams/{team}/{season}/gamelog-advanced/"
-    team_request = requests.get(team_stats_url)
-    team_soup = BeautifulSoup(team_request.content, 'lxml')
+    """
+    Scrape advanced team game logs from Basketball-Reference for a given team + season.
 
-    if playoffs:
-        selector = 'team_game_log_adv_post'
-    else:
-        selector = 'team_game_log_adv_reg'
+    This function is intentionally defensive:
+    - Requests use timeouts so the scraper cannot hang indefinitely on a slow/stuck response.
+    - A small retry loop handles transient network/HTTP issues.
+    - If the expected table is missing, we raise a clear error (handled by callers).
 
-    table = team_soup.find(name='table', attrs={'id': f'{selector}'})
+    :param team: 3-letter NBA team abbreviation (e.g. "BOS").
+    :param season: End year of season (e.g. 2026 for 2025-26).
+    :param playoffs: True for playoff table, False for regular season table.
+    :returns: DataFrame for the raw BRef table.
+    """
+    team_stats_url = (
+        f"https://www.basketball-reference.com/teams/{team}/{season}/gamelog-advanced/"
+    )
+    selector = "team_game_log_adv_post" if playoffs else "team_game_log_adv_reg"
 
-    df_list = pd.read_html(StringIO(str(table)))
-    df = df_list[0]
+    # Identify as a normal browser; helps avoid occasional blocked/odd responses.
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; Gambling-Project/1.0)"}
 
-    # cant exceed 20 requests per min --> wait 3.3 sec between requests
-    time.sleep(3.3)
+    # Keep the retry loop tiny; we already throttle below and callers can skip failures.
+    max_tries = 3
+    last_exc: Exception | None = None
+    for attempt in range(1, max_tries + 1):
+        try:
+            # Hard timeout so we don't hang at a single team/season forever.
+            # (connect timeout, read timeout)
+            resp = requests.get(team_stats_url, headers=headers, timeout=(10, 30))
+            resp.raise_for_status()
 
-    return df
+            team_soup = BeautifulSoup(resp.content, "lxml")
+            table = team_soup.find(name="table", attrs={"id": selector})
+            if table is None:
+                raise ValueError("No tables found")
+
+            df_list = pd.read_html(StringIO(str(table)))
+            return df_list[0]
+        except Exception as exc:  # noqa: BLE001 — network/HTML variance
+            last_exc = exc
+            if attempt < max_tries:
+                # Short backoff for transient failures; still keep global request rate low.
+                time.sleep(2.0 * attempt)
+            else:
+                break
+        finally:
+            # Can't exceed 20 requests/min → wait ~3.3s between attempts/requests.
+            time.sleep(3.3)
+
+    # If we got here, all retries failed.
+    assert last_exc is not None
+    raise last_exc
 
 def clean_team_log(df, team):
     """
@@ -124,9 +150,16 @@ def clean_team_log(df, team):
     df["Home"] = df["Home"].map({"Home": True, "Away": False})
                        
 
-    # Set OT to a real boolean column without dtype churn. Some BRef seasons have OT
-    # values missing; treat those as non-OT.
-    df.loc[:, "OT"] = df["OT"].fillna("").eq("OT").astype("boolean")
+    # Set OT to nullable boolean. BRef/pandas often reads this column as float64; assigning
+    # boolean into that dtype triggers a pandas FutureWarning. Normalize via string first.
+    df["OT"] = (
+        df["OT"]
+        .astype("string")
+        .fillna("")
+        .str.strip()
+        .eq("OT")
+        .astype("boolean")
+    )
 
     # remove redundant column 'rk, rename 'Gtm' to Game
     df.drop(columns=["Rk"], inplace=True)
