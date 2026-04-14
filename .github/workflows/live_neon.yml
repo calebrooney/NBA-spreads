@@ -11,6 +11,8 @@ jobs:
   live-neon:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: write
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       ODDS_API_KEY_FREE: ${{ secrets.ODDS_API_KEY_FREE }}
@@ -33,11 +35,32 @@ jobs:
           # --force is intentionally NOT used here; schedule runs are gated in-script.
           python scripts/live_neon_sink.py --days-back-game-logs 2
 
+      - name: Commit workflow status
+        if: always()
+        run: |
+          if [ ! -f status/live-neon.json ]; then
+            echo "No status/live-neon.json written; nothing to commit."
+            exit 0
+          fi
+
+          if git diff --quiet -- status/live-neon.json; then
+            echo "Status unchanged; nothing to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add status/live-neon.json
+          git commit -m "chore: update live-neon status"
+          git push
+
       - name: Upload logs artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: live-neon-logs
-          path: logs/
+          path: |
+            logs/
+            status/live-neon.json
           if-no-files-found: ignore
 
