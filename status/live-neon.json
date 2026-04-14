@@ -1,0 +1,17 @@
+{
+  "days_back_game_logs": 2,
+  "fk_eligible_odds_rows": 0,
+  "inserted_game_logs_rows": 0,
+  "message": "staged odds; 0 FK-eligible (likely pre-game)",
+  "odds_outcome": "staged_only_fk_missing",
+  "odds_rows_fk_missing": 32,
+  "odds_rows_prepped": 32,
+  "odds_rows_raw": 2,
+  "outcome": "success",
+  "promoted_odds_rows": 0,
+  "staged_odds_rows": 32,
+  "timestamp_pacific": "2026-04-14T13:56:35.007830-07:00",
+  "timestamp_utc": "2026-04-14T20:56:35.008184+00:00",
+  "tz_pacific": "PDT",
+  "workflow": "live-neon"
+}
