@@ -16,6 +16,7 @@ numpy==2.0.2
 nbainjuries==1.0.0
 packaging==25.0
 pandas==2.3.3
+psycopg2-binary==2.9.11
 pillow==11.3.0
 pyparsing==3.2.5
 python-dateutil==2.9.0.post0
@@ -23,6 +24,7 @@ python-dotenv==1.2.1
 pytz==2025.2
 requests==2.32.5
 six==1.17.0
+sqlalchemy==2.0.36
 tzdata==2025.2
 urllib3==2.5.0
 zipp==3.23.0
