@@ -3,11 +3,9 @@ name: live-neon
 on:
   workflow_dispatch:
   schedule:
-    # 06:30, 11:00, 17:30 PT ≈ 13:30, 18:00, 00:30 UTC (standard time).
-    # We still compute "today" in Pacific inside the script.
-    - cron: "30 13 * * *"
-    - cron: "0 18 * * *"
-    - cron: "30 0 * * *"
+    # GitHub cron is UTC-only and does not understand PST/PDT.
+    # We run hourly and let the script gate on Pacific local time (DST-proof).
+    - cron: "0 * * * *"
 
 jobs:
   live-neon:
@@ -32,6 +30,7 @@ jobs:
 
       - name: Run live Neon ingestion
         run: |
+          # --force is intentionally NOT used here; schedule runs are gated in-script.
           python scripts/live_neon_sink.py --days-back-game-logs 2
 
       - name: Upload logs artifact
