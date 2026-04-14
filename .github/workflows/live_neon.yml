@@ -4,8 +4,8 @@ on:
   workflow_dispatch:
   schedule:
     # GitHub cron is UTC-only and does not understand PST/PDT.
-    # We run hourly and let the script gate on Pacific local time (DST-proof).
-    - cron: "0 * * * *"
+    # We run every 3 hours and let the script gate on Pacific local time (DST-proof).
+    - cron: "0 */3 * * *"
 
 jobs:
   live-neon:
