@@ -3,6 +3,8 @@
 ## game margin column in BRef game logs will be standardized to (home team - away team), so can remove all spreads that give score from away team pov
 
 import os
+import re
+import sys
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -11,6 +13,13 @@ from dotenv import load_dotenv
 from sqlalchemy import MetaData, Table, create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+# Ensure repo root is on sys.path so we can import ``nba_spreads`` from scripts.
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from nba_spreads.clean_odds_data import clean_odds_data
 
 teams_dict = {'ATL':'Atlanta Hawks', 'BOS':'Boston Celtics', 'BRK':'Brooklyn Nets', 'CHI':'Chicago Bulls', 'CHO':'Charlotte Hornets', 'CLE':'Cleveland Cavaliers', 'DAL':'Dallas Mavericks', 'DEN':'Denver Nuggets', 'DET':'Detroit Pistons', 'GSW':'Golden State Warriors', 'HOU':'Houston Rockets', 'IND':'Indiana Pacers', 'LAC':'LA Clippers', 'LAL':'Los Angeles Lakers', 'MEM':'Memphis Grizzlies', 'MIA':'Miami Heat', 'MIL':'Milwaukee Bucks', 'MIN':'Minnesota Timberwolves', 'NOP':'New Orleans Pelicans', 'NYK':'New York Knicks', 'OKC':'Oklahoma City Thunder', 'ORL':'Orlando Magic', 'PHI':'Philadelphia 76ers', 'PHO':'Phoenix Suns', 'POR':'Portland Trail Blazers', 'SAC':'Sacramento Kings', 'SAS':'San Antonio Spurs', 'TOR':'Toronto Raptors', 'UTA':'Utah Jazz', 'WAS':'Washington Wizards'}
 
@@ -517,7 +526,6 @@ def discover_processed_game_logs_csv_path(repo_root: Path) -> Path:
         "Rename the one you want to 'historical_game_logs.csv'."
     )
 
-
 def load_historical_game_logs_csv(
     csv_path: Path,
     min_date: date,
@@ -557,6 +565,165 @@ def load_historical_game_logs_csv(
     if {"game_id", "team"}.issubset(prepped.columns):
         prepped = prepped.drop_duplicates(subset=["game_id", "team"], keep="first")
     return prepped
+
+
+def discover_raw_odds_snapshot_paths(
+    repo_root: Path,
+    since: date,
+    until: date,
+) -> list[Path]:
+    """
+    Find ``data/raw/NBAodds_YYYY-MM-DD_HHMM.csv`` snapshot files within an inclusive date window.
+
+    The backfill uses only already-collected snapshots (no paid historical endpoints).
+
+    :param repo_root: Repository root.
+    :param since: Inclusive lower bound on the local (filename) day.
+    :param until: Inclusive upper bound on the local (filename) day.
+    :return: Sorted list of matching paths.
+    """
+    raw_dir = repo_root / "data" / "raw"
+    if not raw_dir.is_dir():
+        return []
+
+    # Example: NBAodds_2026-04-09_0630.csv
+    pat = re.compile(r"^NBAodds_(\d{4}-\d{2}-\d{2})_\d{4}\.csv$")
+    paths: list[Path] = []
+    for p in sorted(raw_dir.glob("NBAodds_*.csv")):
+        m = pat.match(p.name)
+        if not m:
+            continue
+        d = pd.to_datetime(m.group(1), format="%Y-%m-%d").date()
+        if since <= d <= until:
+            paths.append(p)
+    return paths
+
+
+def load_and_prepare_raw_odds_snapshot(csv_path: Path) -> pd.DataFrame:
+    """
+    Load one raw live snapshot CSV and prepare it for direct insertion into ``nba.odds``.
+
+    :param csv_path: Path like ``data/raw/NBAodds_YYYY-MM-DD_HHMM.csv``.
+    :return: Dataframe prepared by ``odds_db_prep`` (may be empty).
+    """
+    raw = pd.read_csv(csv_path)
+    if raw.empty:
+        return pd.DataFrame()
+
+    # Raw snapshots are in the Odds API "live" shape (nested bookmakers/markets/outcomes).
+    cleaned = clean_odds_data(raw, live=True)
+    if cleaned.empty:
+        return pd.DataFrame()
+
+    return odds_db_prep(cleaned)
+
+
+def scrape_missing_game_logs_window(min_date: date, max_date: date) -> pd.DataFrame:
+    """
+    Scrape Basketball-Reference advanced team game logs for a narrow date window.
+
+    This is intended for small gaps where the processed CSV is known to end early (e.g. it ends
+    at 2026-04-06 but you need 2026-04-07→2026-04-13).
+
+    :param min_date: Inclusive start date for game logs.
+    :param max_date: Inclusive end date for game logs.
+    :return: Prepared dataframe ready for ``insert_game_logs`` (may be empty if no games).
+    """
+    from nba_spreads.game_data import game_logs
+
+    years = season_years_in_range(min_date, max_date)
+    frames: list[pd.DataFrame] = []
+    for team in game_logs.teams:
+        try:
+            df = game_logs.fetch_team_logs_for_date_window(
+                team=team,
+                season_years=years,
+                min_date=min_date,
+                max_date=max_date,
+            )
+        except Exception as exc:  # noqa: BLE001 — scraping variance
+            print(f"skip BRef {team} {years} {min_date}..{max_date}: {exc}")
+            continue
+        if df is not None and not df.empty:
+            frames.append(df)
+
+    if not frames:
+        return pd.DataFrame()
+
+    combined = pd.concat(frames, ignore_index=True)
+    combined = combined.drop_duplicates(subset=["Game_ID", "Team"], keep="first")
+    return game_logs_db_prep(combined, "NBA")
+
+
+def run_backfill_from_raw(
+    since: date,
+    until: date,
+    game_logs_csv: str | None = None,
+) -> None:
+    """
+    Backfill from raw snapshots directly into FK-protected tables (no staging).
+
+    Steps:
+    - Insert game logs from processed CSV for ``since..min(until, 2026-04-06)``.
+    - Scrape BRef game logs for ``max(since, 2026-04-07)..until`` (the known CSV gap).
+    - Load/clean raw odds snapshots from ``data/raw`` for ``since..until``.
+    - Filter odds rows to only FK-valid ``(game_id, team)`` pairs, then insert into ``nba.odds``.
+
+    :param since: Inclusive start date (YYYY-MM-DD).
+    :param until: Inclusive end date (YYYY-MM-DD).
+    :param game_logs_csv: Optional override path (relative to repo root or absolute).
+    """
+    repo_root = Path(__file__).resolve().parents[1]
+    engine = get_db_engine()
+
+    raw_paths = discover_raw_odds_snapshot_paths(repo_root, since=since, until=until)
+    if not raw_paths:
+        raise FileNotFoundError(
+            f"No raw snapshot files under {repo_root / 'data' / 'raw'} for {since}..{until}."
+        )
+
+    csv_cutoff = date(2026, 4, 6)
+    csv_min = since
+    csv_max = min(until, csv_cutoff)
+
+    if game_logs_csv is None:
+        csv_path = discover_processed_game_logs_csv_path(repo_root)
+    else:
+        csv_path = Path(game_logs_csv)
+        if not csv_path.is_absolute():
+            csv_path = repo_root / csv_path
+
+    if csv_min <= csv_max:
+        print(f"Loading game logs from CSV for {csv_min}..{csv_max}: {csv_path}")
+        logs_csv = load_historical_game_logs_csv(csv_path, csv_min, csv_max)
+        n_csv = insert_game_logs(logs_csv, engine=engine)
+        print(f"Inserted {n_csv} game_logs rows from CSV.")
+
+    scrape_min = max(since, csv_cutoff + timedelta(days=1))
+    scrape_max = until
+    if scrape_min <= scrape_max:
+        print(f"Scraping BRef game logs for {scrape_min}..{scrape_max} (CSV gap).")
+        scraped = scrape_missing_game_logs_window(scrape_min, scrape_max)
+        n_scraped = insert_game_logs(scraped, engine=engine)
+        print(f"Inserted {n_scraped} game_logs rows from BRef scrape.")
+
+    total_prepared = 0
+    total_inserted = 0
+    for p in raw_paths:
+        prepared = load_and_prepare_raw_odds_snapshot(p)
+        if prepared.empty:
+            continue
+        total_prepared += len(prepared)
+
+        filtered, _missing = filter_odds_to_game_logs_fk(prepared, engine=engine)
+        if filtered.empty:
+            continue
+        total_inserted += insert_odds(filtered, engine=engine)
+
+    print(
+        f"Prepared {total_prepared} odds rows from {len(raw_paths)} raw files; "
+        f"inserted {total_inserted} FK-valid odds rows into nba.odds."
+    )
 
 
 def run_bulk_load(
@@ -644,8 +811,49 @@ def _parse_opt_date(s: str | None) -> date | None:
 
 
 if __name__ == "__main__":
-    # One-time bulk load, no CLI required:
-    # - loads all processed odds under data/processed/odds*.csv
-    # - loads historical game logs from data/processed/historical_game_logs.csv
-    # - inserts game_logs first, then odds (FK dependency)
-    run_bulk_load()
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description=(
+            "Neon bulk loaders.\n\n"
+            "processed: load data/processed/odds*.csv + historical_game_logs.csv (FK-protected).\n"
+            "raw-backfill: backfill from data/raw snapshots and (if needed) scrape missing game logs.\n"
+            "Note: this script does NOT use odds staging; that belongs in live_neon_sink.py."
+        )
+    )
+    parser.add_argument(
+        "--mode",
+        type=str,
+        default="processed",
+        choices=["processed", "raw-backfill"],
+        help="Which loader to run (default: processed).",
+    )
+    parser.add_argument(
+        "--since",
+        type=str,
+        default=None,
+        help="Inclusive start date (YYYY-MM-DD). Required for --mode raw-backfill; optional for processed.",
+    )
+    parser.add_argument(
+        "--until",
+        type=str,
+        default=None,
+        help="Inclusive end date (YYYY-MM-DD). Required for --mode raw-backfill; optional for processed.",
+    )
+    parser.add_argument(
+        "--game-logs-csv",
+        type=str,
+        default=None,
+        help="Optional override path to historical game logs CSV.",
+    )
+    args = parser.parse_args()
+
+    since_d = _parse_opt_date(args.since)
+    until_d = _parse_opt_date(args.until)
+
+    if args.mode == "processed":
+        run_bulk_load(since=since_d, until=until_d, game_logs_csv=args.game_logs_csv)
+    else:
+        if since_d is None or until_d is None:
+            raise SystemExit("--mode raw-backfill requires --since and --until (YYYY-MM-DD).")
+        run_backfill_from_raw(since=since_d, until=until_d, game_logs_csv=args.game_logs_csv)

@@ -1,0 +1,44 @@
+name: live-neon
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 06:30, 11:00, 17:30 PT ≈ 13:30, 18:00, 00:30 UTC (standard time).
+    # We still compute "today" in Pacific inside the script.
+    - cron: "30 13 * * *"
+    - cron: "0 18 * * *"
+    - cron: "30 0 * * *"
+
+jobs:
+  live-neon:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      ODDS_API_KEY_FREE: ${{ secrets.ODDS_API_KEY_FREE }}
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run live Neon ingestion
+        run: |
+          python scripts/live_neon_sink.py --days-back-game-logs 2
+
+      - name: Upload logs artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-neon-logs
+          path: logs/
+          if-no-files-found: ignore
+
