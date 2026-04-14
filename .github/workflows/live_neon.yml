@@ -43,6 +43,9 @@ jobs:
             exit 0
           fi
 
+          # `git diff` ignores untracked files, so make sure new files register as changes.
+          git add -N status/live-neon.json
+
           if git diff --quiet -- status/live-neon.json; then
             echo "Status unchanged; nothing to commit."
             exit 0
