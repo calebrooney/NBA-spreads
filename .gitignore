@@ -6,3 +6,5 @@ __pycache__/
 logs/
 data/raw/
 data/processed/
+sql/
+
