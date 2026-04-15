@@ -453,8 +453,11 @@ def main() -> None:
     parser.add_argument(
         "--grace-minutes",
         type=int,
-        default=7,
-        help="Allowed +/- minutes around --run-at-local times (default: 7).",
+        default=45,
+        help=(
+            "Allowed +/- minutes around --run-at-local times (default: 45). "
+            "GitHub scheduled workflows can be delayed by tens of minutes, so this should not be too small."
+        ),
     )
     parser.add_argument(
         "--force",

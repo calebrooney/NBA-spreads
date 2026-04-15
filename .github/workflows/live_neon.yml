@@ -33,7 +33,8 @@ jobs:
       - name: Run live Neon ingestion
         run: |
           # --force is intentionally NOT used here; schedule runs are gated in-script.
-          python scripts/live_neon_sink.py --days-back-game-logs 2
+          # Scheduled GitHub Actions runs can start late; widen grace so runs don't skip ingestion.
+          python scripts/live_neon_sink.py --days-back-game-logs 2 --grace-minutes 45
 
       - name: Commit workflow status
         if: always()
