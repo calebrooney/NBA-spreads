@@ -2,7 +2,7 @@
   "days_back_game_logs": 2,
   "fk_eligible_odds_rows": 0,
   "inserted_game_logs_rows": 0,
-  "message": "skip (gate): now=2026-04-15 09:08 PDT, run_at=['06:00', '07:00', '08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00', '21:00', '22:00', '23:00', '00:00'], grace=7m",
+  "message": "skip (gate): now=2026-04-15 12:21 PDT, run_at=['06:00', '07:00', '08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00', '21:00', '22:00', '23:00', '00:00'], grace=7m",
   "odds_outcome": "skipped_gate",
   "odds_rows_fk_missing": 0,
   "odds_rows_prepped": 0,
@@ -10,8 +10,8 @@
   "outcome": "skipped_gate",
   "promoted_odds_rows": 0,
   "staged_odds_rows": 0,
-  "timestamp_pacific": "2026-04-15T09:08:39.202556-07:00",
-  "timestamp_utc": "2026-04-15T16:08:39.202794+00:00",
+  "timestamp_pacific": "2026-04-15T12:21:32.983326-07:00",
+  "timestamp_utc": "2026-04-15T19:21:32.983596+00:00",
   "tz_pacific": "PDT",
   "workflow": "live-neon"
 }
