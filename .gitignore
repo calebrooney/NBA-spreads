@@ -7,4 +7,5 @@ logs/
 data/raw/
 data/processed/
 sql/
+plans/
 
