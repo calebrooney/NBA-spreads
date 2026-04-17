@@ -4,7 +4,7 @@ End-to-end training + walk-forward evaluation for the Phase-1 home-margin model.
 This module intentionally:
 - Excludes the locked holdout period (2025 playoffs + 2025-26 regular season proxy).
 - Uses time-safe, walk-forward validation (no random shuffles).
-- Reports MAE/RMSE/bias for several baselines plus a tabular regressor.
+- Reports MAE/RMSE/bias for several baselines plus one or more tabular regressors.
 """
 
 from __future__ import annotations
@@ -35,7 +35,28 @@ class TrainEvalConfig:
     min_train_days: int = 240
     feature_config: FeatureConfig = FeatureConfig()
     model_suite_config: ModelSuiteConfig = ModelSuiteConfig()
-    model_kinds: tuple[ModelKind, ...] = ("lightgbm", "ridge")
+    # Default suite order: LightGBM first (requested), then strong/simple baselines, then
+    # sklearn HGB as an extra in-family comparator.
+    model_kinds: tuple[ModelKind, ...] = ("lightgbm", "ridge", "xgboost", "hist_gb")
+
+
+@dataclass(frozen=True)
+class WalkForwardDiagnostics:
+    """
+    Diagnostics emitted by the walk-forward evaluator.
+    """
+
+    dates_monotonic_increasing: bool
+
+
+@dataclass(frozen=True)
+class WalkForwardOutput:
+    """
+    Structured output of a walk-forward run.
+    """
+
+    results: dict[str, pd.DataFrame]
+    diagnostics: WalkForwardDiagnostics
 
 
 def _baseline_predict_zero(n: int) -> np.ndarray:
@@ -81,13 +102,13 @@ def _baseline_predict_diff_margin_roll10(X: pd.DataFrame) -> np.ndarray:
 
 def walk_forward_train_eval(
     game_logs: pd.DataFrame, cfg: TrainEvalConfig | None = None
-) -> dict[str, pd.DataFrame]:
+) -> WalkForwardOutput:
     """
     Run walk-forward evaluation on pre-holdout games.
 
     :param game_logs: Raw `nba.game_logs` dataframe.
     :param cfg: TrainEvalConfig.
-    :return: Dict mapping model/baseline name -> results dataframe.
+    :return: WalkForwardOutput containing results tables and diagnostics.
     """
     c = cfg or TrainEvalConfig()
 
@@ -98,6 +119,13 @@ def walk_forward_train_eval(
 
     X, y = select_model_matrix(Xy)
     dates = Xy["date"]
+    diagnostics = WalkForwardDiagnostics(
+        dates_monotonic_increasing=bool(dates.is_monotonic_increasing)
+    )
+
+    # Hard guardrail: if the target leaks into X, metrics will look "too good to be true".
+    if "home_margin" in X.columns:
+        raise ValueError("Target column `home_margin` leaked into feature matrix `X`.")
 
     folds = expanding_walk_forward_folds(
         dates, n_splits=c.n_splits, test_days=c.test_days, min_train_days=c.min_train_days
@@ -197,7 +225,8 @@ def walk_forward_train_eval(
                 )
             )
 
-    return {k: summarize_fold_results(v) for k, v in outputs.items()}
+    results = {k: summarize_fold_results(v) for k, v in outputs.items()}
+    return WalkForwardOutput(results=results, diagnostics=diagnostics)
 
 
 def format_report(results: dict[str, pd.DataFrame]) -> str:

@@ -147,6 +147,16 @@ def build_game_level_features(
             rolled, group_col="team", time_col="date", value_cols=value_cols, window=w
         )
 
+    # IMPORTANT: prevent target leakage from postgame columns.
+    #
+    # `nba.game_logs` contains per-game outcomes (e.g. tm_score/opp_score) that are only
+    # known after the game finishes. We keep *only* prior-only rolling features (the
+    # `_roll{w}` columns) and identifiers needed for the game-level join.
+    id_cols = ["game_id", "date", "team", "opp", "home", "home_margin"]
+    roll_cols = [c for c in rolled.columns if any(c.endswith(f"_roll{w}") for w in cfg.rolling_windows)]
+    keep_cols = [c for c in id_cols if c in rolled.columns] + roll_cols
+    rolled = rolled[keep_cols].copy()
+
     # Build one row per game: start from the home row.
     home_rows = rolled.loc[rolled["home"].eq(True)].copy()
     home_rows = home_rows.drop_duplicates(subset=["game_id"], keep="first")
@@ -178,13 +188,15 @@ def build_game_level_features(
             if h in Xy.columns and a in Xy.columns:
                 Xy[f"diff_{base}_roll{w}"] = Xy[h] - Xy[a]
 
+    # Normalize key types and enforce chronological ordering. This keeps walk-forward
+    # diagnostics and index-based folds easier to reason about.
+    Xy["date"] = pd.to_datetime(Xy["date"], errors="coerce").dt.normalize()
+    Xy["home_margin"] = pd.to_numeric(Xy["home_margin"], errors="coerce").astype(float)
+    Xy = Xy.sort_values(["date", "game_id"], ascending=True)
+
     # Remove rows without full rolling history (burn-in period).
     feature_cols = [c for c in Xy.columns if c not in {"game_id", "date", "team", "opp", "home_margin"}]
     Xy = Xy.dropna(subset=feature_cols + ["home_margin"]).reset_index(drop=True)
-
-    # Normalize types for downstream modeling.
-    Xy["home_margin"] = pd.to_numeric(Xy["home_margin"], errors="coerce").astype(float)
-    Xy["date"] = pd.to_datetime(Xy["date"]).dt.normalize()
 
     return Xy, df_holdout
 

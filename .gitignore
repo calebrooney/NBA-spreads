@@ -9,3 +9,6 @@ data/processed/
 sql/
 plans/
 
+# Generated ML evaluation artifacts (kept locally for analysis)
+model_results/
+

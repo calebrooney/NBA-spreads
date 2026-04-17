@@ -36,3 +36,18 @@ def load_game_logs(engine: "object") -> pd.DataFrame:
     df = pd.read_sql(query, con=engine)
     return df
 
+
+def load_odds(engine: "object") -> pd.DataFrame:
+    """
+    Load the raw `nba.odds` table into a pandas DataFrame.
+
+    This table is used for market benchmarks (e.g., how well the latest/closing spread
+    predicts game outcomes) and for downstream bet selection.
+
+    :param engine: SQLAlchemy engine connected to the database.
+    :return: DataFrame containing all columns from `nba.odds`.
+    """
+    query = "SELECT * FROM nba.odds"
+    df = pd.read_sql(query, con=engine)
+    return df
+
