@@ -82,12 +82,12 @@ def utc_timestamp_for_filename() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
 
-def next_iteration_results_path(out_dir: Path, *, stem: str = "walk_forward_results") -> Path:
+def next_iteration_results_path(out_dir: Path, *, stem: str = "walk_forward") -> Path:
     """
     Choose the next `XX_<stem>.json` filename in `out_dir`.
 
     This supports repeated benchmarking runs where you want stable ordering like:
-    `01_walk_forward_results.json`, `02_walk_forward_results.json`, ...
+    `01_walk_forward.json`, `02_walk_forward.json`, ...
 
     :param out_dir: Directory where results are written.
     :param stem: Filename stem after the `XX_` prefix.
@@ -95,21 +95,33 @@ def next_iteration_results_path(out_dir: Path, *, stem: str = "walk_forward_resu
     """
     out_dir = Path(out_dir)
     pat = re.compile(rf"^(?P<i>\d{{2}})_{re.escape(stem)}\.json$")
+    legacy_stem = "walk_forward_results" if stem == "walk_forward" else None
+    legacy_pat = (
+        re.compile(rf"^(?P<i>\d{{2}})_{re.escape(legacy_stem)}\.json$")
+        if legacy_stem is not None
+        else None
+    )
 
     max_i = 0
+    legacy_count = 0
     if out_dir.exists():
         for p in out_dir.iterdir():
             if not p.is_file():
                 continue
             m = pat.match(p.name)
             if not m:
+                if legacy_pat is not None and legacy_pat.match(p.name):
+                    legacy_count += 1
                 continue
             try:
                 max_i = max(max_i, int(m.group("i")))
             except ValueError:
                 continue
 
-    next_i = max_i + 1
+    # If we previously wrote `*_walk_forward_results.json` (legacy stem), treat those
+    # as occupying subsequent run numbers so the next correct-stem filename matches
+    # the "human expected" next index.
+    next_i = max_i + legacy_count + 1
     return out_dir / f"{next_i:02d}_{stem}.json"
 
 
@@ -128,6 +140,7 @@ def results_payload(
     :return: Dict suitable for `save_results_json`.
     """
     meta: dict[str, Any] = {
+        "comments": "",
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
     }
     if extra:

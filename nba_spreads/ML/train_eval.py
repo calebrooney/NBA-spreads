@@ -103,7 +103,7 @@ def main() -> None:
         )
 
     out_dir = Path("model_results")
-    out_path = next_iteration_results_path(out_dir, stem="walk_forward_results")
+    out_path = next_iteration_results_path(out_dir, stem="walk_forward")
     payload = results_payload(
         results=out.results,
         train_eval_cfg=cfg,
