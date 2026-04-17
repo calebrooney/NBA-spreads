@@ -41,14 +41,16 @@ class LightGBMConfig:
     better-behaved edge magnitudes for downstream ATS decisioning.
     """
 
-    n_estimators: int = 1200
+    # Conservative defaults: favor stability + low bias over maximum fit.
+    n_estimators: int = 1600
     learning_rate: float = 0.02
+    max_depth: int = 4
     num_leaves: int = 31
-    min_child_samples: int = 50
-    subsample: float = 0.8
-    colsample_bytree: float = 0.8
+    min_child_samples: int = 120
+    subsample: float = 0.7
+    colsample_bytree: float = 0.7
     reg_alpha: float = 0.0
-    reg_lambda: float = 1.0
+    reg_lambda: float = 10.0
     random_state: int = 7
 
 
@@ -76,12 +78,12 @@ class XGBoostConfig:
 
     n_estimators: int = 1200
     learning_rate: float = 0.02
-    max_depth: int = 5
-    min_child_weight: float = 20.0
+    max_depth: int = 4
+    min_child_weight: float = 40.0
     subsample: float = 0.8
     colsample_bytree: float = 0.8
     reg_alpha: float = 0.0
-    reg_lambda: float = 1.0
+    reg_lambda: float = 10.0
     random_state: int = 7
 
 
@@ -142,6 +144,7 @@ def make_regressor(
             objective="regression",
             n_estimators=p.n_estimators,
             learning_rate=p.learning_rate,
+            max_depth=p.max_depth,
             num_leaves=p.num_leaves,
             min_child_samples=p.min_child_samples,
             subsample=p.subsample,

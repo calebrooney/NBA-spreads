@@ -103,11 +103,14 @@ def main() -> None:
         )
 
     out_dir = Path("model_results")
-    out_path = next_iteration_results_path(out_dir, stem="walk_forward")
+    out_path = next_iteration_results_path(out_dir, stem="walk_forward_results")
     payload = results_payload(
         results=out.results,
         train_eval_cfg=cfg,
-        extra={"diagnostics": out.diagnostics, "market_latest_spread_benchmark": market_benchmark},
+        extra={
+            "diagnostics": out.diagnostics,
+            "market_latest_spread_benchmark": market_benchmark,
+        },
     )
     written = save_results_json(payload, out_path)
     print(f"\nWrote JSON results to: {written}")

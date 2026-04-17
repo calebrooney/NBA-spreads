@@ -47,7 +47,7 @@ def fetch_csv(
         link_params = (
             f"sports/{sports_key}/odds/"
             f"?apiKey={api_key}&regions={regions}&markets={market}"
-            f"&commenceTimeFrom={commence_time_from}&commenceTimeTo={commence_time_to}"
+            f"&commenceTimeFrom={commence_time_from}"
         )
 
     else:

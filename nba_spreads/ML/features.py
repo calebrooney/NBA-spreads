@@ -58,6 +58,40 @@ def _coerce_game_log_types(game_logs: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def _add_schedule_features_prior(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Add schedule/rest features that are known before tip-off.
+
+    These features are computed per-team using only prior game dates:
+    - rest_days: calendar days since previous game (NaN for first game)
+    - b2b: 1 if previous game was yesterday (rest_days == 1)
+    - games_last4: count of games in the prior 4 days (excluding current game)
+    - games_last6: count of games in the prior 6 days (excluding current game)
+
+    :param df: Team-game log rows (one row per team per game).
+    :return: Copy with schedule feature columns appended.
+    """
+    out = df.copy()
+    out = out.sort_values(["team", "date", "game_id"], ascending=True)
+
+    prev_date = out.groupby("team", sort=False)["date"].shift(1)
+    rest_days = (out["date"] - prev_date).dt.days.astype("float")
+    out["rest_days"] = rest_days
+    out["b2b"] = (rest_days == 1).astype("float")
+
+    # Count prior games within rolling day windows using shifted previous dates.
+    # We use the last 5 games as candidates; this is cheap and typically enough.
+    prior_dates = [out.groupby("team", sort=False)["date"].shift(k) for k in range(1, 6)]
+    for window_days, name in [(4, "games_last4"), (6, "games_last6")]:
+        cnt = 0.0
+        for d in prior_dates:
+            cnt += ((out["date"] - d).dt.days <= (window_days - 1)).astype("float")
+        # If prior date is NaT, comparison yields False -> contributes 0.
+        out[name] = cnt
+
+    return out
+
+
 def _rolling_mean_prior(
     df: pd.DataFrame, group_col: str, time_col: str, value_cols: Iterable[str], window: int
 ) -> pd.DataFrame:
@@ -141,7 +175,7 @@ def build_game_level_features(
     ]
     value_cols = [c for c in numeric_candidates if c in df_model.columns]
 
-    rolled = df_model.copy()
+    rolled = _add_schedule_features_prior(df_model)
     for w in cfg.rolling_windows:
         rolled = _rolling_mean_prior(
             rolled, group_col="team", time_col="date", value_cols=value_cols, window=w
@@ -153,8 +187,11 @@ def build_game_level_features(
     # known after the game finishes. We keep *only* prior-only rolling features (the
     # `_roll{w}` columns) and identifiers needed for the game-level join.
     id_cols = ["game_id", "date", "team", "opp", "home", "home_margin"]
-    roll_cols = [c for c in rolled.columns if any(c.endswith(f"_roll{w}") for w in cfg.rolling_windows)]
-    keep_cols = [c for c in id_cols if c in rolled.columns] + roll_cols
+    roll_cols = [
+        c for c in rolled.columns if any(c.endswith(f"_roll{w}") for w in cfg.rolling_windows)
+    ]
+    schedule_cols = [c for c in ["rest_days", "b2b", "games_last4", "games_last6"] if c in rolled.columns]
+    keep_cols = [c for c in id_cols if c in rolled.columns] + schedule_cols + roll_cols
     rolled = rolled[keep_cols].copy()
 
     # Build one row per game: start from the home row.
@@ -187,6 +224,12 @@ def build_game_level_features(
             a = f"away_{base}_roll{w}"
             if h in Xy.columns and a in Xy.columns:
                 Xy[f"diff_{base}_roll{w}"] = Xy[h] - Xy[a]
+
+    for base in ["rest_days", "b2b", "games_last4", "games_last6"]:
+        h = f"home_{base}"
+        a = f"away_{base}"
+        if h in Xy.columns and a in Xy.columns:
+            Xy[f"diff_{base}"] = Xy[h] - Xy[a]
 
     # Normalize key types and enforce chronological ordering. This keeps walk-forward
     # diagnostics and index-based folds easier to reason about.

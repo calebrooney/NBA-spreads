@@ -94,34 +94,23 @@ def next_iteration_results_path(out_dir: Path, *, stem: str = "walk_forward") ->
     :return: Suggested output path (parent dir is not created here).
     """
     out_dir = Path(out_dir)
-    pat = re.compile(rf"^(?P<i>\d{{2}})_{re.escape(stem)}\.json$")
-    legacy_stem = "walk_forward_results" if stem == "walk_forward" else None
-    legacy_pat = (
-        re.compile(rf"^(?P<i>\d{{2}})_{re.escape(legacy_stem)}\.json$")
-        if legacy_stem is not None
-        else None
-    )
+    pat_exact = re.compile(rf"^(?P<i>\d{{2}})_{re.escape(stem)}\.json$")
+    pat_prefix = re.compile(r"^(?P<i>\d{2})_.*\.json$")
 
     max_i = 0
-    legacy_count = 0
     if out_dir.exists():
         for p in out_dir.iterdir():
             if not p.is_file():
                 continue
-            m = pat.match(p.name)
+            m = pat_exact.match(p.name) or pat_prefix.match(p.name)
             if not m:
-                if legacy_pat is not None and legacy_pat.match(p.name):
-                    legacy_count += 1
                 continue
             try:
                 max_i = max(max_i, int(m.group("i")))
             except ValueError:
                 continue
 
-    # If we previously wrote `*_walk_forward_results.json` (legacy stem), treat those
-    # as occupying subsequent run numbers so the next correct-stem filename matches
-    # the "human expected" next index.
-    next_i = max_i + legacy_count + 1
+    next_i = max_i + 1
     return out_dir / f"{next_i:02d}_{stem}.json"
 
 
