@@ -1,0 +1,688 @@
+{
+  "meta": {
+    "comments": "",
+    "created_at_utc": "2026-04-17T02:44:53.319037+00:00",
+    "diagnostics": {
+      "dates_monotonic_increasing": true
+    },
+    "market_latest_spread_benchmark": {
+      "bias": -0.0981040543026735,
+      "mae": 10.491798437152015,
+      "rmse": 13.52215032735776,
+      "n": 103273.0
+    }
+  },
+  "config": {
+    "n_splits": 6,
+    "test_days": 30,
+    "min_train_days": 240,
+    "feature_config": {
+      "rolling_windows": [
+        5,
+        10,
+        20
+      ],
+      "holdout_start": "2025-04-14"
+    },
+    "model_suite_config": {
+      "hist_gb": {
+        "learning_rate": 0.05,
+        "max_depth": 6,
+        "max_iter": 600,
+        "min_samples_leaf": 30,
+        "l2_regularization": 0.001,
+        "random_state": 7
+      },
+      "lightgbm": {
+        "n_estimators": 1200,
+        "learning_rate": 0.02,
+        "num_leaves": 31,
+        "min_child_samples": 50,
+        "subsample": 0.8,
+        "colsample_bytree": 0.8,
+        "reg_alpha": 0.0,
+        "reg_lambda": 1.0,
+        "random_state": 7
+      },
+      "ridge": {
+        "alpha": 5.0,
+        "random_state": 7
+      },
+      "xgboost": {
+        "n_estimators": 1200,
+        "learning_rate": 0.02,
+        "max_depth": 5,
+        "min_child_weight": 20.0,
+        "subsample": 0.8,
+        "colsample_bytree": 0.8,
+        "reg_alpha": 0.0,
+        "reg_lambda": 1.0,
+        "random_state": 7
+      }
+    },
+    "model_kinds": [
+      "lightgbm",
+      "ridge",
+      "xgboost",
+      "hist_gb"
+    ]
+  },
+  "results": {
+    "baseline_zero": {
+      "rows": [
+        {
+          "fold": 1,
+          "train_start": "2021-11-28",
+          "train_end": "2022-12-28",
+          "test_start": "2022-12-29",
+          "test_end": "2023-01-27",
+          "n_train": 1531,
+          "n_test": 218,
+          "mae": 10.752293578,
+          "rmse": 13.3512876058,
+          "bias": -2.4587155963
+        },
+        {
+          "fold": 2,
+          "train_start": "2021-11-28",
+          "train_end": "2023-04-09",
+          "test_start": "2023-04-15",
+          "test_end": "2023-05-16",
+          "n_train": 2239,
+          "n_test": 69,
+          "mae": 11.9565217391,
+          "rmse": 14.5008745363,
+          "bias": -5.347826087
+        },
+        {
+          "fold": 3,
+          "train_start": "2021-11-28",
+          "train_end": "2023-12-17",
+          "test_start": "2023-12-18",
+          "test_end": "2024-01-17",
+          "n_train": 2701,
+          "n_test": 229,
+          "mae": 13.288209607,
+          "rmse": 16.533279922,
+          "bias": -2.9650655022
+        },
+        {
+          "fold": 4,
+          "train_start": "2021-11-28",
+          "train_end": "2024-03-29",
+          "test_start": "2024-03-30",
+          "test_end": "2024-05-05",
+          "n_train": 3425,
+          "n_test": 172,
+          "mae": 12.9941860465,
+          "rmse": 16.2185294547,
+          "bias": -3.0523255814
+        },
+        {
+          "fold": 5,
+          "train_start": "2021-11-28",
+          "train_end": "2024-11-29",
+          "test_start": "2024-11-30",
+          "test_end": "2025-01-01",
+          "n_train": 3923,
+          "n_test": 204,
+          "mae": 12.6323529412,
+          "rmse": 16.1526116385,
+          "bias": -1.7205882353
+        },
+        {
+          "fold": 6,
+          "train_start": "2021-11-28",
+          "train_end": "2025-03-13",
+          "test_start": "2025-03-14",
+          "test_end": "2025-04-13",
+          "n_train": 4621,
+          "n_test": 244,
+          "mae": 14.6721311475,
+          "rmse": 18.073846697,
+          "bias": -1.2540983607
+        },
+        {
+          "fold": "overall",
+          "train_start": "2021-11-28",
+          "train_end": "2025-03-13",
+          "test_start": "2022-12-29",
+          "test_end": "2025-04-13",
+          "n_train": 18440,
+          "n_test": 1136,
+          "mae": 12.7159491766,
+          "rmse": 15.8050716424,
+          "bias": -2.7997698938
+        }
+      ]
+    },
+    "baseline_mean": {
+      "rows": [
+        {
+          "fold": 1,
+          "train_start": "2021-11-28",
+          "train_end": "2022-12-28",
+          "test_start": "2022-12-29",
+          "test_end": "2023-01-27",
+          "n_train": 1531,
+          "n_test": 218,
+          "mae": 10.4932016611,
+          "rmse": 13.1237814283,
+          "bias": -0.1484608609
+        },
+        {
+          "fold": 2,
+          "train_start": "2021-11-28",
+          "train_end": "2023-04-09",
+          "test_start": "2023-04-15",
+          "test_end": "2023-05-16",
+          "n_train": 2239,
+          "n_test": 69,
+          "mae": 11.363432174,
+          "rmse": 13.8478264062,
+          "bias": -3.1758743228
+        },
+        {
+          "fold": 3,
+          "train_start": "2021-11-28",
+          "train_end": "2023-12-17",
+          "test_start": "2023-12-18",
+          "test_end": "2024-01-17",
+          "n_train": 2701,
+          "n_test": 229,
+          "mae": 12.8956976957,
+          "rmse": 16.2771281593,
+          "bias": -0.6222295155
+        },
+        {
+          "fold": 4,
+          "train_start": "2021-11-28",
+          "train_end": "2024-03-29",
+          "test_start": "2024-03-30",
+          "test_end": "2024-05-05",
+          "n_train": 3425,
+          "n_test": 172,
+          "mae": 12.8498777797,
+          "rmse": 15.9516911295,
+          "bias": -0.855829231
+        },
+        {
+          "fold": 5,
+          "train_start": "2021-11-28",
+          "train_end": "2024-11-29",
+          "test_start": "2024-11-30",
+          "test_end": "2025-01-01",
+          "n_train": 3923,
+          "n_test": 204,
+          "mae": 12.5704805246,
+          "rmse": 16.068777312,
+          "bias": 0.5090829347
+        },
+        {
+          "fold": 6,
+          "train_start": "2021-11-28",
+          "train_end": "2025-03-13",
+          "test_start": "2025-03-14",
+          "test_end": "2025-04-13",
+          "n_train": 4621,
+          "n_test": 244,
+          "mae": 14.5726405824,
+          "rmse": 18.05193028,
+          "bias": 0.8837505898
+        },
+        {
+          "fold": "overall",
+          "train_start": "2021-11-28",
+          "train_end": "2025-03-13",
+          "test_start": "2022-12-29",
+          "test_end": "2025-04-13",
+          "n_train": 18440,
+          "n_test": 1136,
+          "mae": 12.4575550696,
+          "rmse": 15.5535224526,
+          "bias": -0.5682600676
+        }
+      ]
+    },
+    "baseline_diff_margin_roll10": {
+      "rows": [
+        {
+          "fold": 1,
+          "train_start": "2021-11-28",
+          "train_end": "2022-12-28",
+          "test_start": "2022-12-29",
+          "test_end": "2023-01-27",
+          "n_train": 1531,
+          "n_test": 218,
+          "mae": 11.4105504587,
+          "rmse": 14.1359892707,
+          "bias": -1.8197247706
+        },
+        {
+          "fold": 2,
+          "train_start": "2021-11-28",
+          "train_end": "2023-04-09",
+          "test_start": "2023-04-15",
+          "test_end": "2023-05-16",
+          "n_train": 2239,
+          "n_test": 69,
+          "mae": 11.7942028986,
+          "rmse": 14.687271429,
+          "bias": -5.1971014493
+        },
+        {
+          "fold": 3,
+          "train_start": "2021-11-28",
+          "train_end": "2023-12-17",
+          "test_start": "2023-12-18",
+          "test_end": "2024-01-17",
+          "n_train": 2701,
+          "n_test": 229,
+          "mae": 14.2484716157,
+          "rmse": 18.1150025884,
+          "bias": -2.4956331878
+        },
+        {
+          "fold": 4,
+          "train_start": "2021-11-28",
+          "train_end": "2024-03-29",
+          "test_start": "2024-03-30",
+          "test_end": "2024-05-05",
+          "n_train": 3425,
+          "n_test": 172,
+          "mae": 13.5418604651,
+          "rmse": 17.1474453993,
+          "bias": -2.7848837209
+        },
+        {
+          "fold": 5,
+          "train_start": "2021-11-28",
+          "train_end": "2024-11-29",
+          "test_start": "2024-11-30",
+          "test_end": "2025-01-01",
+          "n_train": 3923,
+          "n_test": 204,
+          "mae": 12.6509803922,
+          "rmse": 16.3402156369,
+          "bias": -1.2647058824
+        },
+        {
+          "fold": 6,
+          "train_start": "2021-11-28",
+          "train_end": "2025-03-13",
+          "test_start": "2025-03-14",
+          "test_end": "2025-04-13",
+          "n_train": 4621,
+          "n_test": 244,
+          "mae": 15.5045081967,
+          "rmse": 19.5221154541,
+          "bias": -1.2643442623
+        },
+        {
+          "fold": "overall",
+          "train_start": "2021-11-28",
+          "train_end": "2025-03-13",
+          "test_start": "2022-12-29",
+          "test_end": "2025-04-13",
+          "n_train": 18440,
+          "n_test": 1136,
+          "mae": 13.1917623378,
+          "rmse": 16.6580066297,
+          "bias": -2.4710655455
+        }
+      ]
+    },
+    "model_lightgbm": {
+      "rows": [
+        {
+          "fold": 1,
+          "train_start": "2021-11-28",
+          "train_end": "2022-12-28",
+          "test_start": "2022-12-29",
+          "test_end": "2023-01-27",
+          "n_train": 1531,
+          "n_test": 218,
+          "mae": 10.3266593223,
+          "rmse": 13.1581843631,
+          "bias": 1.0324332519
+        },
+        {
+          "fold": 2,
+          "train_start": "2021-11-28",
+          "train_end": "2023-04-09",
+          "test_start": "2023-04-15",
+          "test_end": "2023-05-16",
+          "n_train": 2239,
+          "n_test": 69,
+          "mae": 11.4291524751,
+          "rmse": 14.0395575096,
+          "bias": -2.5891015837
+        },
+        {
+          "fold": 3,
+          "train_start": "2021-11-28",
+          "train_end": "2023-12-17",
+          "test_start": "2023-12-18",
+          "test_end": "2024-01-17",
+          "n_train": 2701,
+          "n_test": 229,
+          "mae": 12.3246956521,
+          "rmse": 15.5560985333,
+          "bias": 0.1493571875
+        },
+        {
+          "fold": 4,
+          "train_start": "2021-11-28",
+          "train_end": "2024-03-29",
+          "test_start": "2024-03-30",
+          "test_end": "2024-05-05",
+          "n_train": 3425,
+          "n_test": 172,
+          "mae": 11.6247139636,
+          "rmse": 14.6332698733,
+          "bias": -0.6201700606
+        },
+        {
+          "fold": 5,
+          "train_start": "2021-11-28",
+          "train_end": "2024-11-29",
+          "test_start": "2024-11-30",
+          "test_end": "2025-01-01",
+          "n_train": 3923,
+          "n_test": 204,
+          "mae": 11.9944566885,
+          "rmse": 15.3752591479,
+          "bias": 1.3494644029
+        },
+        {
+          "fold": 6,
+          "train_start": "2021-11-28",
+          "train_end": "2025-03-13",
+          "test_start": "2025-03-14",
+          "test_end": "2025-04-13",
+          "n_train": 4621,
+          "n_test": 244,
+          "mae": 12.1572943194,
+          "rmse": 15.4411798601,
+          "bias": 0.75702674
+        },
+        {
+          "fold": "overall",
+          "train_start": "2021-11-28",
+          "train_end": "2025-03-13",
+          "test_start": "2022-12-29",
+          "test_end": "2025-04-13",
+          "n_train": 18440,
+          "n_test": 1136,
+          "mae": 11.6428287368,
+          "rmse": 14.7005915479,
+          "bias": 0.013168323
+        }
+      ]
+    },
+    "model_ridge": {
+      "rows": [
+        {
+          "fold": 1,
+          "train_start": "2021-11-28",
+          "train_end": "2022-12-28",
+          "test_start": "2022-12-29",
+          "test_end": "2023-01-27",
+          "n_train": 1531,
+          "n_test": 218,
+          "mae": 10.36535443,
+          "rmse": 13.0713402622,
+          "bias": -0.0015440255
+        },
+        {
+          "fold": 2,
+          "train_start": "2021-11-28",
+          "train_end": "2023-04-09",
+          "test_start": "2023-04-15",
+          "test_end": "2023-05-16",
+          "n_train": 2239,
+          "n_test": 69,
+          "mae": 11.0479395018,
+          "rmse": 13.5992307356,
+          "bias": -2.7745399524
+        },
+        {
+          "fold": 3,
+          "train_start": "2021-11-28",
+          "train_end": "2023-12-17",
+          "test_start": "2023-12-18",
+          "test_end": "2024-01-17",
+          "n_train": 2701,
+          "n_test": 229,
+          "mae": 11.844235128,
+          "rmse": 15.1836266028,
+          "bias": 0.2996719501
+        },
+        {
+          "fold": 4,
+          "train_start": "2021-11-28",
+          "train_end": "2024-03-29",
+          "test_start": "2024-03-30",
+          "test_end": "2024-05-05",
+          "n_train": 3425,
+          "n_test": 172,
+          "mae": 11.9128864542,
+          "rmse": 14.5474588299,
+          "bias": -0.3796193756
+        },
+        {
+          "fold": 5,
+          "train_start": "2021-11-28",
+          "train_end": "2024-11-29",
+          "test_start": "2024-11-30",
+          "test_end": "2025-01-01",
+          "n_train": 3923,
+          "n_test": 204,
+          "mae": 11.1009841257,
+          "rmse": 14.4483782354,
+          "bias": 0.7228873063
+        },
+        {
+          "fold": 6,
+          "train_start": "2021-11-28",
+          "train_end": "2025-03-13",
+          "test_start": "2025-03-14",
+          "test_end": "2025-04-13",
+          "n_train": 4621,
+          "n_test": 244,
+          "mae": 12.3462307638,
+          "rmse": 15.6096580081,
+          "bias": 0.6611385948
+        },
+        {
+          "fold": "overall",
+          "train_start": "2021-11-28",
+          "train_end": "2025-03-13",
+          "test_start": "2022-12-29",
+          "test_end": "2025-04-13",
+          "n_train": 18440,
+          "n_test": 1136,
+          "mae": 11.4362717339,
+          "rmse": 14.409948779,
+          "bias": -0.2453342504
+        }
+      ]
+    },
+    "model_xgboost": {
+      "rows": [
+        {
+          "fold": 1,
+          "train_start": "2021-11-28",
+          "train_end": "2022-12-28",
+          "test_start": "2022-12-29",
+          "test_end": "2023-01-27",
+          "n_train": 1531,
+          "n_test": 218,
+          "mae": 10.3604282733,
+          "rmse": 13.2888691942,
+          "bias": 0.917660252
+        },
+        {
+          "fold": 2,
+          "train_start": "2021-11-28",
+          "train_end": "2023-04-09",
+          "test_start": "2023-04-15",
+          "test_end": "2023-05-16",
+          "n_train": 2239,
+          "n_test": 69,
+          "mae": 11.4198411992,
+          "rmse": 14.1858095657,
+          "bias": -2.6670110351
+        },
+        {
+          "fold": 3,
+          "train_start": "2021-11-28",
+          "train_end": "2023-12-17",
+          "test_start": "2023-12-18",
+          "test_end": "2024-01-17",
+          "n_train": 2701,
+          "n_test": 229,
+          "mae": 12.2135414218,
+          "rmse": 15.5312861923,
+          "bias": -0.2430696905
+        },
+        {
+          "fold": 4,
+          "train_start": "2021-11-28",
+          "train_end": "2024-03-29",
+          "test_start": "2024-03-30",
+          "test_end": "2024-05-05",
+          "n_train": 3425,
+          "n_test": 172,
+          "mae": 11.6416654968,
+          "rmse": 14.5825053008,
+          "bias": -0.4149931813
+        },
+        {
+          "fold": 5,
+          "train_start": "2021-11-28",
+          "train_end": "2024-11-29",
+          "test_start": "2024-11-30",
+          "test_end": "2025-01-01",
+          "n_train": 3923,
+          "n_test": 204,
+          "mae": 11.8520515644,
+          "rmse": 15.2431615871,
+          "bias": 1.4324507663
+        },
+        {
+          "fold": 6,
+          "train_start": "2021-11-28",
+          "train_end": "2025-03-13",
+          "test_start": "2025-03-14",
+          "test_end": "2025-04-13",
+          "n_train": 4621,
+          "n_test": 244,
+          "mae": 12.2668543896,
+          "rmse": 15.4125880962,
+          "bias": 0.5848449743
+        },
+        {
+          "fold": "overall",
+          "train_start": "2021-11-28",
+          "train_end": "2025-03-13",
+          "test_start": "2022-12-29",
+          "test_end": "2025-04-13",
+          "n_train": 18440,
+          "n_test": 1136,
+          "mae": 11.6257303908,
+          "rmse": 14.7073699894,
+          "bias": -0.0650196524
+        }
+      ]
+    },
+    "model_hist_gb": {
+      "rows": [
+        {
+          "fold": 1,
+          "train_start": "2021-11-28",
+          "train_end": "2022-12-28",
+          "test_start": "2022-12-29",
+          "test_end": "2023-01-27",
+          "n_train": 1531,
+          "n_test": 218,
+          "mae": 10.5023683655,
+          "rmse": 13.3961927692,
+          "bias": 1.1728806173
+        },
+        {
+          "fold": 2,
+          "train_start": "2021-11-28",
+          "train_end": "2023-04-09",
+          "test_start": "2023-04-15",
+          "test_end": "2023-05-16",
+          "n_train": 2239,
+          "n_test": 69,
+          "mae": 11.4713371437,
+          "rmse": 14.1689112658,
+          "bias": -2.85462205
+        },
+        {
+          "fold": 3,
+          "train_start": "2021-11-28",
+          "train_end": "2023-12-17",
+          "test_start": "2023-12-18",
+          "test_end": "2024-01-17",
+          "n_train": 2701,
+          "n_test": 229,
+          "mae": 12.3800589002,
+          "rmse": 15.6728485643,
+          "bias": -0.2932002882
+        },
+        {
+          "fold": 4,
+          "train_start": "2021-11-28",
+          "train_end": "2024-03-29",
+          "test_start": "2024-03-30",
+          "test_end": "2024-05-05",
+          "n_train": 3425,
+          "n_test": 172,
+          "mae": 11.6327303095,
+          "rmse": 14.8617390092,
+          "bias": -0.3338805026
+        },
+        {
+          "fold": 5,
+          "train_start": "2021-11-28",
+          "train_end": "2024-11-29",
+          "test_start": "2024-11-30",
+          "test_end": "2025-01-01",
+          "n_train": 3923,
+          "n_test": 204,
+          "mae": 11.8115789733,
+          "rmse": 15.2769017601,
+          "bias": 1.4883618719
+        },
+        {
+          "fold": 6,
+          "train_start": "2021-11-28",
+          "train_end": "2025-03-13",
+          "test_start": "2025-03-14",
+          "test_end": "2025-04-13",
+          "n_train": 4621,
+          "n_test": 244,
+          "mae": 12.3565057809,
+          "rmse": 15.6116481632,
+          "bias": 0.7563118185
+        },
+        {
+          "fold": "overall",
+          "train_start": "2021-11-28",
+          "train_end": "2025-03-13",
+          "test_start": "2022-12-29",
+          "test_end": "2025-04-13",
+          "n_train": 18440,
+          "n_test": 1136,
+          "mae": 11.6924299122,
+          "rmse": 14.8313735886,
+          "bias": -0.0106914222
+        }
+      ]
+    }
+  }
+}
