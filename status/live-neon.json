@@ -10,8 +10,8 @@
   "outcome": "success",
   "promoted_odds_rows": 0,
   "staged_odds_rows": 164,
-  "timestamp_pacific": "2026-09-23T14:13:40.728601-07:00",
-  "timestamp_utc": "2026-09-23T21:13:40.728870+00:00",
+  "timestamp_pacific": "2026-09-23T20:38:01.401580-07:00",
+  "timestamp_utc": "2026-09-24T03:38:01.401935+00:00",
   "tz_pacific": "PDT",
   "workflow": "live-neon"
 }
